@@ -1,0 +1,5 @@
+install.packages("qrcode")
+library(qrcode)
+code <- qr_code("https://kqcmew-hayden0bock.shinyapps.io/HB_Decomp_App/")
+plot(code)
+generate_svg(code, filename = "~/Desktop/PennState2024/SoilEcologyGuestLecture/CollembolaShiny/qr.svg")
