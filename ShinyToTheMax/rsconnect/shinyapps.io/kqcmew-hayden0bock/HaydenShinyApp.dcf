@@ -1,0 +1,12 @@
+name: HaydenShinyApp
+title: HaydenShinyApp
+username: kqcmew-hayden0bock
+account: kqcmew-hayden0bock
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 12914025
+bundleId: 9179238
+url: https://kqcmew-hayden0bock.shinyapps.io/HaydenShinyApp/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
