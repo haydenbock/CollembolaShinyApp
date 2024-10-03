@@ -173,18 +173,18 @@ ui <- fluidPage(
         tabPanel("Organism Parameters",
                  sliderInput("collembola_density", "Initial Collembola Density (Individuals per g soil):",
                              min = 50, max = 400, value = 100, step = 10),
-                 bsTooltip("collembola_density", "Collembola are microarthropods that influence decomposition."),
+                 bsTooltip("collembola_density", "Collembola are a ubiquitous microarthropod."),
                  sliderInput("microbial_biomass", "Initial Microbial Biomass (relative units):",
                              min = 10, max = 100, value = 50, step = 5),
-                 bsTooltip("microbial_biomass", "Microbial biomass represents the population of decomposers.")
+                 bsTooltip("microbial_biomass", "Microbial biomass is approximated through measuring the amount of microbially derived carbon in soils.")
         ),
         tabPanel("Environmental Conditions",
                  sliderInput("moisture", "Soil Moisture (0-100%):",
                              min = 0, max = 100, value = 60, step = 5),
-                 bsTooltip("moisture", "Soil moisture affects microbial activity and population dynamics."),
+                 bsTooltip("moisture", "Soil moisture affects soil organism mobility and activity."),
                  sliderInput("temperature", "Temperature (°F):",
                              min = 32, max = 104, value = 66, step = 2),
-                 bsTooltip("temperature", "Temperature influences biological processes and stochasticity.")
+                 bsTooltip("temperature", "Temperature influences soil organism metabolism and activity.")
         )
       ),
       # Add Clippings Button
@@ -193,8 +193,8 @@ ui <- fluidPage(
       # Info box
       br(),
       bsCollapse(
-        bsCollapsePanel("Learn More About Decomposition Dynamics",
-                        "This simulation models the interactions between Collembola (microarthropods) and microbial biomass in soil ecosystems. Adjust the parameters to explore how different conditions affect decomposition rates.",
+        bsCollapsePanel("Learn More About Collembola and Decomposition",
+                        "This simulation is a very rough approximation of some of the data represented in Bock and Wickings, 2023 [https://www.sciencedirect.com/science/article/pii/S0031405623079647]",
                         style = "info")
       )
     ),
@@ -265,7 +265,7 @@ server <- function(input, output, session) {
         tags$h3("Your Score: 0"),
         tags$p("Try adjusting the parameters to improve decomposition.")
       )
-    } else if (score() >= 90) {
+    } else if (score() >= 80) {
       tags$div(
         tags$h3(paste("Your Score:", score())),
         tags$p("Excellent! You've mastered the decomposition dynamics!")
