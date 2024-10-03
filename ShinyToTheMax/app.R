@@ -6,7 +6,7 @@ library(shinyjs)
 library(plotly)
 
 # Simulation function
-simulate_decomposition <- function(init_collembola, init_microbial_biomass, moisture, temperature_f, days = 360) {
+simulate_decomposition <- function(init_collembola, init_microbial_biomass, moisture, temperature_f, add_clippings = FALSE, days = 360) {
   # Convert temperature from Fahrenheit to Celsius
   temperature_c <- (temperature_f - 32) * 5 / 9
   
@@ -51,49 +51,58 @@ simulate_decomposition <- function(init_collembola, init_microbial_biomass, mois
   K_col <- 500  # Carrying capacity
   
   # Environmental influences
-  moisture_effect <- ifelse(moisture < 20 | moisture > 80, 0.5, 1) *
+  # Adjusted moisture effect to fine-tune decomposition
+  moisture_effect <- ifelse(moisture < 30 | moisture > 70, 0.5, 1) *
     (1 - abs(moisture - 50) / 50)
   
-  # Temperature effect
-  if (temperature_f >= 40 && temperature_f <= 80) {
-    temp_effect <- (temperature_f - 40) / (80 - 40)
+  # Adjusted temperature effect for finer control
+  if (temperature_f >= 50 && temperature_f <= 80) {
+    temp_effect <- (temperature_f - 50) / (80 - 50)
   } else {
-    temp_effect <- 1
+    temp_effect <- 0.5  # Reduced effect outside optimal range
   }
   
-  # Scale the rate for optimal conditions
-  base_decomp_rate <- 0.5  # Adjusted for non-linearity
+  # Adjusted base decomposition rate for lower overall decomposition
+  base_decomp_rate <- 0.1  # Reduced from 0.5 to 0.1
   
   # Base standard deviations for stochasticity
   base_sigma_col <- 10
   base_sigma_microbe <- 0.5
   
-  # Calculate stochasticity factors based on temperature and moisture
-  # For temperature: stochasticity increases with temperature
-  temp_stochasticity <- 1 + ((temperature_f - 68) / 36)  # Optimal temperature is 68°F
-  temp_stochasticity <- max(temp_stochasticity, 1)  # Ensure at least 1
+  # Maximum microbial biomass for normalization
+  max_microbial_biomass <- 100  # Assuming 100 is the maximum microbial biomass
+  
+  # Calculate environmental stochasticity factors based on temperature and moisture
+  # For temperature: stochasticity increases with deviation from optimal 66°F
+  temp_stochasticity <- 1 + (abs(temperature_f - 66) / 30)
   
   # For moisture: stochasticity increases when moisture is very high or very low
-  moisture_stochasticity <- 1 + (abs(moisture - 50) / 50)  # Optimal moisture is 50%
+  moisture_stochasticity <- 1 + (abs(moisture - 50) / 50)
   
-  # Total stochasticity factor
-  stochasticity_factor <- temp_stochasticity * moisture_stochasticity
-  
-  # Adjust sigma values
-  sigma_col <- base_sigma_col * stochasticity_factor
-  sigma_microbe <- base_sigma_microbe * stochasticity_factor
+  # Total environmental stochasticity factor
+  environmental_stochasticity <- temp_stochasticity * moisture_stochasticity
   
   # Parameters for stochastic events
   base_crash_prob <- 0.02  # Base probability of crash
   max_crash_prob <- 0.1    # Maximum probability of crash
   
+  # Flag for clippings effect
+  clippings_effect <- ifelse(add_clippings, 0.5, 1)  # Reduce decomposition by 50% if clippings are added
+  
   for (day in 2:days) {
+    # Update microbial biomass-dependent stochasticity factor
+    microbial_stochasticity_factor <- 1 + (microbial_biomass[day - 1] / max_microbial_biomass)
+    
+    # Adjust sigma_col based on microbial biomass
+    sigma_col <- base_sigma_col * environmental_stochasticity * microbial_stochasticity_factor
+    sigma_microbe <- base_sigma_microbe * environmental_stochasticity
+    
     # Determine crash probability based on Collembola density
     crash_prob <- base_crash_prob + (collembola_density[day - 1] / K_col) * (max_crash_prob - base_crash_prob)
     crash_prob <- min(crash_prob, max_crash_prob)
     
-    # Adjust crash probability based on stochasticity factor
-    crash_prob <- crash_prob * stochasticity_factor
+    # Adjust crash probability based on environmental stochasticity
+    crash_prob <- crash_prob * environmental_stochasticity
     crash_prob <- min(crash_prob, 0.5)  # Cap crash probability at 50%
     
     # Check if a crash occurs
@@ -101,7 +110,7 @@ simulate_decomposition <- function(init_collembola, init_microbial_biomass, mois
       # Collembola population crashes to a random low level
       collembola_density[day] <- collembola_density[day - 1] * runif(1, 0.1, 0.3)
       # Microbial biomass increases due to reduced grazing
-      microbial_biomass[day] <- microbial_biomass[day - 1] + abs(rnorm(1, mean = 5, sd = sigma_microbe))
+      microbial_biomass[day] <- microbial_biomass[day - 1] + abs(rnorm(1, mean = 2, sd = sigma_microbe))
     } else {
       # Collembola population growth with stochasticity
       col_growth <- r_col * collembola_density[day - 1] * (1 - collembola_density[day - 1] / K_col)
@@ -117,11 +126,11 @@ simulate_decomposition <- function(init_collembola, init_microbial_biomass, mois
     
     # Ensure populations stay within bounds
     collembola_density[day] <- max(min(collembola_density[day], K_col), 0)
-    microbial_biomass[day] <- max(microbial_biomass[day], 0)
+    microbial_biomass[day] <- max(min(microbial_biomass[day], max_microbial_biomass), 0)
     
     # Recalculate collembola_effect based on current density
-    optimal_collembola <- 250
-    reduction_per_100 <- 0.20
+    optimal_collembola <- 200  # Adjusted optimal Collembola density
+    reduction_per_100 <- 0.25  # Increased reduction factor
     deviation <- abs(collembola_density[day] - optimal_collembola) / 100
     collembola_effect <- max(0, 1 - (reduction_per_100 * deviation))
     
@@ -139,7 +148,7 @@ simulate_decomposition <- function(init_collembola, init_microbial_biomass, mois
     # Calculate decomposition rate
     microbe_effect <- log(microbial_biomass[day] + 1)
     daily_decomp_rate <- max(0, collembola_effect^2 * microbe_effect * moisture_effect *
-                               recalcitrance_effect * temp_effect * base_decomp_rate)
+                               recalcitrance_effect * temp_effect * base_decomp_rate * clippings_effect)
     decomposition[day] <- decomposition[day - 1] + daily_decomp_rate
     decomposition[day] <- min(decomposition[day], 100)
   }
@@ -171,16 +180,16 @@ ui <- fluidPage(
         ),
         tabPanel("Environmental Conditions",
                  sliderInput("moisture", "Soil Moisture (0-100%):",
-                             min = 0, max = 100, value = 50, step = 5),
+                             min = 0, max = 100, value = 60, step = 5),
                  bsTooltip("moisture", "Soil moisture affects microbial activity and population dynamics."),
                  sliderInput("temperature", "Temperature (°F):",
-                             min = 32, max = 104, value = 68, step = 5),
+                             min = 32, max = 104, value = 66, step = 2),
                  bsTooltip("temperature", "Temperature influences biological processes and stochasticity.")
         )
       ),
-      # Download button
-      downloadButton("downloadData", "Download Simulation Data"),
-      bsTooltip("downloadData", "Download the simulation data for further analysis."),
+      # Add Clippings Button
+      actionButton("add_clippings", "Add Clippings"),
+      bsTooltip("add_clippings", "Add clippings to the system, reducing decomposition rate by 50%."),
       # Info box
       br(),
       bsCollapse(
@@ -201,13 +210,22 @@ ui <- fluidPage(
 
 # Define server logic
 server <- function(input, output, session) {
+  # Reactive value to store whether clippings have been added
+  clippings_added <- reactiveVal(FALSE)
+  
+  # Observe Add Clippings button click
+  observeEvent(input$add_clippings, {
+    clippings_added(TRUE)
+  })
+  
   # Reactive simulation results
   simulation_results <- reactive({
     simulate_decomposition(
       input$collembola_density,
       input$microbial_biomass,
       input$moisture,
-      input$temperature
+      input$temperature,
+      add_clippings = clippings_added()
     )
   })
   
@@ -269,6 +287,8 @@ server <- function(input, output, session) {
   output$feedback <- renderUI({
     if (all(is.na(decomposition()))) {
       tags$p("The system crashed due to unstable Collembola density or extreme moisture.", style = "color: red;")
+    } else if (clippings_added()) {
+      tags$p("Clippings added: Decomposition rate reduced by 50%.", style = "color: purple;")
     } else if (max(decomposition(), na.rm = TRUE) >= 90) {
       tags$p("Great job! You've reached high decomposition levels!", style = "color: green;")
     } else if (max(decomposition(), na.rm = TRUE) >= 60) {
@@ -332,28 +352,10 @@ server <- function(input, output, session) {
     }
   })
   
-  # Download handler
-  output$downloadData <- downloadHandler(
-    filename = function() {
-      paste("simulation_data_", Sys.Date(), ".csv", sep = "")
-    },
-    content = function(file) {
-      df <- data.frame(
-        Day = days(),
-        Decomposition = decomposition(),
-        Microbial_Biomass = microbial_biomass(),
-        Collembola_Density = collembola_density()
-      )
-      write.csv(df, file, row.names = FALSE)
-    }
-  )
-  
-  # Optional sound notification (Commented Out)
-  # observe({
-  #   if (max(decomposition(), na.rm = TRUE) >= 90) {
-  #     runjs("var audio = new Audio('success_sound.mp3'); audio.play();")
-  #   }
-  # })
+  # Reset clippings when parameters change
+  observeEvent(list(input$collembola_density, input$microbial_biomass, input$moisture, input$temperature), {
+    clippings_added(FALSE)
+  })
 }
 
 # Run the application 
